@@ -181,7 +181,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             worker_name: The worker name associated with the flow run used for preparation.
         """
 
-        self.flow_run_logger = flow_run_logger(flow_run=flow_run).getChild(
+        logger = flow_run_logger(flow_run=flow_run).getChild(
             "worker",
             extra={
                 "worker_name": worker_name,
@@ -198,7 +198,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             worker_name=worker_name,
         )
 
-        self._populate_env()
+        self._populate_env(logger=logger)
         self._configure_cloudsql_volumes()
         self._populate_or_format_command()
         self._format_args_if_present()
@@ -212,7 +212,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         """
         self.job_body["template"]["template"]["timeout"] = f"{self.timeout}s"
 
-    def _populate_env(self):
+    def _populate_env(self, logger: Optional[PrefectLogAdapter] = None):
         """
         Populates the job body with environment variables.
         """
@@ -228,9 +228,9 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
 
         self.job_body["template"]["template"]["containers"][0]["env"].extend(envs)
 
-        self._deduplicate_env()
+        self._deduplicate_env(logger=logger)
 
-    def _deduplicate_env(self):
+    def _deduplicate_env(self, logger: Optional[PrefectLogAdapter] = None):
         """
         Deduplicates the environment variables giving preference to the latest configured values.
         In this worker that is in order of decreasing precedence:
@@ -246,7 +246,8 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         # Itterate from back to keep the latest appended values for each env name
         msg = f"Deduplicating environment variables: {self.job_body['template']['template']['containers'][0]['env']}"
         print(msg)
-        self.flow_run_logger.info(msg)
+        if logger:
+            logger.info(msg)
 
         duplicate_envs = set()
         envs_to_keep = {}
@@ -264,7 +265,8 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
 
         msg = f"Deduplicated environment variables: {self.job_body['template']['template']['containers'][0]['env']}"
         print(msg)
-        self.flow_run_logger.info(msg)
+        if logger:
+            logger.info(msg)
 
     def _configure_cloudsql_volumes(self):
         """
