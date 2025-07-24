@@ -337,13 +337,15 @@ class TestCloudRunWorkerJobV2Configuration:
             "OVERRIDE_BY_SECRET": SecretKeySelector(secret="SECRET2", version="1"),
         }
 
+        # Call populate_env and then deduplicate_env separately
         cloud_run_worker_v2_job_config._populate_env()
+        cloud_run_worker_v2_job_config._deduplicate_env()
 
         env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
         ][0]["env"]
 
-        # Should have 6 unique variables (duplicates removed)
+        # Should have 6 unique variables (duplicates removed by deduplication)
         env_names = [env["name"] for env in env_vars]
         assert len(set(env_names)) == 6
         assert len(env_vars) == 6
@@ -379,3 +381,48 @@ class TestCloudRunWorkerJobV2Configuration:
             env for env in env_vars if env["name"] == "DUPLICATE_EXISTING"
         )
         assert duplicate_existing["value"] == "second_existing"
+
+    def test_populate_env_without_deduplication(self, cloud_run_worker_v2_job_config):
+        """Test that _populate_env() creates duplicates which are then removed by _deduplicate_env()."""
+        # Set up scenario with duplicates
+        cloud_run_worker_v2_job_config.job_body["template"]["template"]["containers"][
+            0
+        ]["env"] = [
+            {"name": "SHARED_VAR", "value": "existing_value"},
+        ]
+
+        cloud_run_worker_v2_job_config.env = {
+            "SHARED_VAR": "plain_text_value",
+        }
+
+        cloud_run_worker_v2_job_config.env_from_secrets = {
+            "SHARED_VAR": SecretKeySelector(secret="SECRET1", version="latest"),
+        }
+
+        # Call only _populate_env() - should create duplicates
+        cloud_run_worker_v2_job_config._populate_env()
+
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
+            "containers"
+        ][0]["env"]
+
+        # Should have 3 total variables (with duplicates)
+        assert len(env_vars) == 3
+        # But only 1 unique name
+        env_names = [env["name"] for env in env_vars]
+        assert len(set(env_names)) == 1
+        assert all(name == "SHARED_VAR" for name in env_names)
+
+        # Now call _deduplicate_env() to remove duplicates
+        cloud_run_worker_v2_job_config._deduplicate_env()
+
+        env_vars_after = cloud_run_worker_v2_job_config.job_body["template"][
+            "template"
+        ]["containers"][0]["env"]
+
+        # Should now have only 1 variable (duplicates removed)
+        assert len(env_vars_after) == 1
+        assert env_vars_after[0]["name"] == "SHARED_VAR"
+        # Should be the secret version (highest precedence)
+        assert "valueSource" in env_vars_after[0]
+        assert env_vars_after[0]["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
