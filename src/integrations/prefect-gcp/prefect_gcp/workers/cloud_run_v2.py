@@ -218,6 +218,36 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
 
         self.job_body["template"]["template"]["containers"][0]["env"].extend(envs)
 
+        self._deduplicate_env()
+
+    def _deduplicate_env(self):
+        """
+        Deduplicates the environment variables giving preference to the latest configured values.
+        In this worker that is in order of decreasing precedence:
+        1. Environment variables set using references to secrets in flow run
+            configuration  configuration (possibly originating from work pool
+            config or deployment specific config).
+        2. Environment variables set using plain text in the flow run
+            configuration (possibly originating from work pool config or
+            deployment specific config).
+        3. Environment variables inherited and/or created by the worker
+            context. (e.g. PREFECT_DEBUG_MODE, PREFECT__FLOW_RUN_ID, etc.)
+        """
+        # Itterate from back to keep the latest appended values for each env name
+        duplicate_envs = set()
+        envs_to_keep = {}
+        for env in reversed(
+            self.job_body["template"]["template"]["containers"][0]["env"]
+        ):
+            if env["name"] in envs_to_keep:
+                duplicate_envs.add(env["name"])
+            else:
+                envs_to_keep[env["name"]] = env
+
+        self.job_body["template"]["template"]["containers"][0]["env"] = list(
+            envs_to_keep.values()
+        )
+
     def _configure_cloudsql_volumes(self):
         """
         Populates volumes and volume mounts for cloudsql instances
@@ -247,9 +277,9 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         Populates the job body with the image if not present.
         """
         if "image" not in self.job_body["template"]["template"]["containers"][0]:
-            self.job_body["template"]["template"]["containers"][0]["image"] = (
-                f"docker.io/{get_prefect_image_name()}"
-            )
+            self.job_body["template"]["template"]["containers"][0][
+                "image"
+            ] = f"docker.io/{get_prefect_image_name()}"
 
     def _populate_or_format_command(self):
         """
