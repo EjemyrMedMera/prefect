@@ -94,12 +94,14 @@ class TestCloudRunWorkerJobV2Configuration:
     def test_populate_env(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-        ]
+        ][0]["env"]
+
+        # Check that both environment variables are present
+        assert len(env_vars) == 2
+        env_dict = {env["name"]: env["value"] for env in env_vars}
+        assert env_dict == {"ENV1": "VALUE1", "ENV2": "VALUE2"}
 
     def test_populate_env_with_secrets(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config.env_from_secrets = {
@@ -107,18 +109,24 @@ class TestCloudRunWorkerJobV2Configuration:
         }
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-            {
-                "name": "SECRET_ENV1",
-                "valueSource": {
-                    "secretKeyRef": {"secret": "SECRET1", "version": "latest"}
-                },
-            },
-        ]
+        ][0]["env"]
+
+        # Check that all three environment variables are present
+        assert len(env_vars) == 3
+
+        # Check plain text variables
+        plain_text_vars = {
+            env["name"]: env["value"] for env in env_vars if "value" in env
+        }
+        assert plain_text_vars == {"ENV1": "VALUE1", "ENV2": "VALUE2"}
+
+        # Check secret variable
+        secret_vars = [env for env in env_vars if "valueSource" in env]
+        assert len(secret_vars) == 1
+        assert secret_vars[0]["name"] == "SECRET_ENV1"
+        assert secret_vars[0]["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
 
     def test_populate_env_with_existing_envs(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config.job_body["template"]["template"]["containers"][
@@ -129,19 +137,24 @@ class TestCloudRunWorkerJobV2Configuration:
         }
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV0", "value": "VALUE0"},
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-            {
-                "name": "SECRET_ENV1",
-                "valueSource": {
-                    "secretKeyRef": {"secret": "SECRET1", "version": "latest"}
-                },
-            },
-        ]
+        ][0]["env"]
+
+        # Check that all four environment variables are present
+        assert len(env_vars) == 4
+
+        # Check plain text variables
+        plain_text_vars = {
+            env["name"]: env["value"] for env in env_vars if "value" in env
+        }
+        assert plain_text_vars == {"ENV0": "VALUE0", "ENV1": "VALUE1", "ENV2": "VALUE2"}
+
+        # Check secret variable
+        secret_vars = [env for env in env_vars if "valueSource" in env]
+        assert len(secret_vars) == 1
+        assert secret_vars[0]["name"] == "SECRET_ENV1"
+        assert secret_vars[0]["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
 
     def test_populate_image_if_not_present(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config._populate_image_if_not_present()
@@ -171,9 +184,9 @@ class TestCloudRunWorkerJobV2Configuration:
     def test_remove_vpc_access_if_connector_unset(
         self, cloud_run_worker_v2_job_config, vpc_access
     ):
-        cloud_run_worker_v2_job_config.job_body["template"]["template"]["vpcAccess"] = (
-            vpc_access
-        )
+        cloud_run_worker_v2_job_config.job_body["template"]["template"][
+            "vpcAccess"
+        ] = vpc_access
 
         cloud_run_worker_v2_job_config._remove_vpc_access_if_unset()
 
@@ -398,3 +411,77 @@ class TestCloudRunWorkerJobV2Configuration:
                 "secretKeyRef": {"secret": "prefect-auth-string", "version": "latest"}
             },
         } in env_vars
+
+    def test_populate_env_with_deduplication(self, cloud_run_worker_v2_job_config):
+        """Test comprehensive environment variable population and deduplication.
+
+        Tests all precedence levels and deduplication logic:
+        1. Secrets (highest precedence)
+        2. Plain text env vars (medium precedence)
+        3. Existing env vars in job body (lowest precedence)
+        """
+        # Set up existing env vars in job body (lowest precedence)
+        cloud_run_worker_v2_job_config.job_body["template"]["template"]["containers"][
+            0
+        ]["env"] = [
+            {"name": "EXISTING_ONLY", "value": "existing_value"},
+            {"name": "OVERRIDE_BY_PLAIN", "value": "existing_override_me"},
+            {"name": "OVERRIDE_BY_SECRET", "value": "existing_override_me"},
+            {"name": "DUPLICATE_EXISTING", "value": "first_existing"},
+            {"name": "DUPLICATE_EXISTING", "value": "second_existing"},
+        ]
+
+        # Set up plain text env vars (medium precedence)
+        cloud_run_worker_v2_job_config.env = {
+            "PLAIN_ONLY": "plain_value",
+            "OVERRIDE_BY_PLAIN": "plain_overrides_existing",
+            "OVERRIDE_BY_SECRET": "plain_gets_overridden",
+        }
+
+        # Set up secret env vars (highest precedence)
+        cloud_run_worker_v2_job_config.env_from_secrets = {
+            "SECRET_ONLY": SecretKeySelector(secret="SECRET1", version="latest"),
+            "OVERRIDE_BY_SECRET": SecretKeySelector(secret="SECRET2", version="1"),
+        }
+        cloud_run_worker_v2_job_config._populate_env()
+
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
+            "containers"
+        ][0]["env"]
+
+        # Should have 6 unique variables (duplicates removed)
+        env_names = [env["name"] for env in env_vars]
+        assert len(set(env_names)) == 6
+        assert len(env_vars) == 6
+
+        # Test precedence: secrets win
+        override_by_secret = next(
+            env for env in env_vars if env["name"] == "OVERRIDE_BY_SECRET"
+        )
+        assert "valueSource" in override_by_secret
+        assert override_by_secret["valueSource"]["secretKeyRef"]["secret"] == "SECRET2"
+
+        # Test precedence: plain text wins over existing
+        override_by_plain = next(
+            env for env in env_vars if env["name"] == "OVERRIDE_BY_PLAIN"
+        )
+        assert override_by_plain["value"] == "plain_overrides_existing"
+
+        # Test existing values remain when not overridden
+        existing_only = next(env for env in env_vars if env["name"] == "EXISTING_ONLY")
+        assert existing_only["value"] == "existing_value"
+
+        # Test plain text only variables
+        plain_only = next(env for env in env_vars if env["name"] == "PLAIN_ONLY")
+        assert plain_only["value"] == "plain_value"
+
+        # Test secret only variables
+        secret_only = next(env for env in env_vars if env["name"] == "SECRET_ONLY")
+        assert "valueSource" in secret_only
+        assert secret_only["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
+
+        # Test deduplication keeps last occurrence
+        duplicate_existing = next(
+            env for env in env_vars if env["name"] == "DUPLICATE_EXISTING"
+        )
+        assert duplicate_existing["value"] == "second_existing"
