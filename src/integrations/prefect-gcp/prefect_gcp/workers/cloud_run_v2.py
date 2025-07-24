@@ -354,15 +354,14 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             context. (e.g. PREFECT_DEBUG_MODE, PREFECT__FLOW_RUN_ID, etc.)
         """
         # Itterate from back to keep the latest appended values for each env name
-        duplicate_envs = set()
         envs_to_keep = {}
         for env in reversed(
             self.job_body["template"]["template"]["containers"][0]["env"]
         ):
             if env["name"] in envs_to_keep:
-                duplicate_envs.add(env["name"])
-            else:
-                envs_to_keep[env["name"]] = env
+                continue
+
+            envs_to_keep[env["name"]] = env
 
         self.job_body["template"]["template"]["containers"][0]["env"] = list(
             envs_to_keep.values()
