@@ -14,7 +14,7 @@ from googleapiclient.errors import HttpError
 from jsonpatch import JsonPatch
 from pydantic import Field, PrivateAttr, field_validator
 
-from prefect.logging.loggers import PrefectLogAdapter, flow_run_logger
+from prefect.logging.loggers import PrefectLogAdapter
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
 from prefect.utilities.dockerutils import get_prefect_image_name
 from prefect.workers.base import (
@@ -180,16 +180,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             work_pool: The work pool associated with the flow run used for preparation.
             worker_name: The worker name associated with the flow run used for preparation.
         """
-
-        logger = flow_run_logger(flow_run=flow_run).getChild(
-            "worker",
-            extra={
-                "worker_name": worker_name,
-                "work_pool_name": work_pool.name if work_pool else "<unknown>",
-                "work_pool_id": str(work_pool.id if work_pool else "unknown"),
-            },
-        )
-
         super().prepare_for_flow_run(
             flow_run=flow_run,
             deployment=deployment,
@@ -285,9 +275,9 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         Populates the job body with the image if not present.
         """
         if "image" not in self.job_body["template"]["template"]["containers"][0]:
-            self.job_body["template"]["template"]["containers"][0][
-                "image"
-            ] = f"docker.io/{get_prefect_image_name()}"
+            self.job_body["template"]["template"]["containers"][0]["image"] = (
+                f"docker.io/{get_prefect_image_name()}"
+            )
 
     def _populate_or_format_command(self):
         """
