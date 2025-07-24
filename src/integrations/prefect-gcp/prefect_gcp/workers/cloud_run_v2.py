@@ -210,7 +210,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             worker_name: The worker name associated with the flow run used for preparation.
         """
 
-        self.flow_run_logger = flow_run_logger(flow_run=flow_run).getChild(
+        logger = flow_run_logger(flow_run=flow_run).getChild(
             "worker",
             extra={
                 "worker_name": worker_name,
@@ -354,10 +354,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             context. (e.g. PREFECT_DEBUG_MODE, PREFECT__FLOW_RUN_ID, etc.)
         """
         # Itterate from back to keep the latest appended values for each env name
-        msg = f"Deduplicating environment variables: {self.job_body['template']['template']['containers'][0]['env']}"
-        print(msg)
-        self.flow_run_logger.info(msg)
-
         duplicate_envs = set()
         envs_to_keep = {}
         for env in reversed(
@@ -371,10 +367,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         self.job_body["template"]["template"]["containers"][0]["env"] = list(
             envs_to_keep.values()
         )
-
-        msg = f"Deduplicated environment variables: {self.job_body['template']['template']['containers'][0]['env']}"
-        print(msg)
-        self.flow_run_logger.info(msg)
 
     def _configure_cloudsql_volumes(self):
         """
