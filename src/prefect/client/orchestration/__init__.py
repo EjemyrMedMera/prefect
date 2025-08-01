@@ -19,6 +19,7 @@ from packaging import version
 from starlette import status
 from typing_extensions import ParamSpec, Self, TypeVar
 
+from prefect.client.iap_auth import IAPAuth
 from prefect.client.orchestration._artifacts.client import (
     ArtifactClient,
     ArtifactAsyncClient,
@@ -118,6 +119,7 @@ from prefect.settings import (
     PREFECT_API_AUTH_STRING,
     PREFECT_API_DATABASE_CONNECTION_URL,
     PREFECT_API_ENABLE_HTTP2,
+    PREFECT_API_IAP_ENABLED,
     PREFECT_API_KEY,
     PREFECT_API_REQUEST_TIMEOUT,
     PREFECT_API_SSL_CERT_FILE,
@@ -244,6 +246,11 @@ def get_client(
             "No Prefect API URL provided. Please set PREFECT_API_URL to the address of a running Prefect server."
         )
 
+    if PREFECT_API_IAP_ENABLED.value():
+        if httpx_settings is None:
+            httpx_settings = {}
+        httpx_settings["auth"] = IAPAuth()
+
     if sync_client:
         return SyncPrefectClient(
             api,
@@ -279,7 +286,7 @@ class PrefectClient(
     WorkPoolAsyncClient,
 ):
     """
-    An asynchronous client for interacting with the [Prefect REST API](/api-ref/rest-api/).
+    An asynchronous client for interacting with the [Prefect REST API](https://docs.prefect.io/v3/api-ref/rest-api/).
 
     Args:
         api: the REST API URL or FastAPI application to connect to
@@ -1142,7 +1149,7 @@ class SyncPrefectClient(
     WorkPoolClient,
 ):
     """
-    A synchronous client for interacting with the [Prefect REST API](/api-ref/rest-api/).
+    A synchronous client for interacting with the [Prefect REST API](https://docs.prefect.io/v3/api-ref/rest-api/).
 
     Args:
         api: the REST API URL or FastAPI application to connect to
