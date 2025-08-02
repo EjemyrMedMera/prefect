@@ -83,8 +83,6 @@ dependencies = [
     "whenever>=0.7.3,<0.9.0; python_version>='3.13'",
     "uv>=0.6.0",
     "semver>=3.0.4",
-    "google-cloud-secret-manager>=2.24.0",
-    "google-auth>=2.40.3",
 ]
 [project.urls]
 Changelog = "https://github.com/PrefectHQ/prefect/releases"
@@ -105,6 +103,10 @@ otel = [
 aws = ["prefect-aws>=0.5.8"]
 azure = ["prefect-azure>=0.4.0"]
 gcp = ["prefect-gcp>=0.6.0"]
+gcp-iap = [
+    "google-cloud-secret-manager>=2.24.0",
+    "google-auth>=2.40.3",
+]
 docker = ["prefect-docker>=0.6.0"]
 kubernetes = ["prefect-kubernetes>=0.4.0"]
 shell = ["prefect-shell>=0.3.0"]
