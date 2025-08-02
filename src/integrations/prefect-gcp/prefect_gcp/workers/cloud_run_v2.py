@@ -304,7 +304,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         ]
         envs.extend(envs_from_secrets)
 
-        # Add Prefect API key from secret if configured
+        # Add the Prefect API key and auth string to the environment variables
         if self.prefect_api_key_secret:
             envs.append(
                 {
@@ -314,8 +314,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
                     },
                 }
             )
-
-        # Add Prefect API auth string from secret if configured
         if self.prefect_api_auth_string_secret:
             envs.append(
                 {

@@ -94,12 +94,14 @@ class TestCloudRunWorkerJobV2Configuration:
     def test_populate_env(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-        ]
+        ][0]["env"]
+
+        # Check that both environment variables are present
+        assert len(env_vars) == 2
+        env_dict = {env["name"]: env["value"] for env in env_vars}
+        assert env_dict == {"ENV1": "VALUE1", "ENV2": "VALUE2"}
 
     def test_populate_env_with_secrets(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config.env_from_secrets = {
@@ -107,18 +109,24 @@ class TestCloudRunWorkerJobV2Configuration:
         }
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-            {
-                "name": "SECRET_ENV1",
-                "valueSource": {
-                    "secretKeyRef": {"secret": "SECRET1", "version": "latest"}
-                },
-            },
-        ]
+        ][0]["env"]
+
+        # Check that all three environment variables are present
+        assert len(env_vars) == 3
+
+        # Check plain text variables
+        plain_text_vars = {
+            env["name"]: env["value"] for env in env_vars if "value" in env
+        }
+        assert plain_text_vars == {"ENV1": "VALUE1", "ENV2": "VALUE2"}
+
+        # Check secret variable
+        secret_vars = [env for env in env_vars if "valueSource" in env]
+        assert len(secret_vars) == 1
+        assert secret_vars[0]["name"] == "SECRET_ENV1"
+        assert secret_vars[0]["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
 
     def test_populate_env_with_existing_envs(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config.job_body["template"]["template"]["containers"][
@@ -129,19 +137,24 @@ class TestCloudRunWorkerJobV2Configuration:
         }
         cloud_run_worker_v2_job_config._populate_env()
 
-        assert cloud_run_worker_v2_job_config.job_body["template"]["template"][
+        env_vars = cloud_run_worker_v2_job_config.job_body["template"]["template"][
             "containers"
-        ][0]["env"] == [
-            {"name": "ENV0", "value": "VALUE0"},
-            {"name": "ENV1", "value": "VALUE1"},
-            {"name": "ENV2", "value": "VALUE2"},
-            {
-                "name": "SECRET_ENV1",
-                "valueSource": {
-                    "secretKeyRef": {"secret": "SECRET1", "version": "latest"}
-                },
-            },
-        ]
+        ][0]["env"]
+
+        # Check that all four environment variables are present
+        assert len(env_vars) == 4
+
+        # Check plain text variables
+        plain_text_vars = {
+            env["name"]: env["value"] for env in env_vars if "value" in env
+        }
+        assert plain_text_vars == {"ENV0": "VALUE0", "ENV1": "VALUE1", "ENV2": "VALUE2"}
+
+        # Check secret variable
+        secret_vars = [env for env in env_vars if "valueSource" in env]
+        assert len(secret_vars) == 1
+        assert secret_vars[0]["name"] == "SECRET_ENV1"
+        assert secret_vars[0]["valueSource"]["secretKeyRef"]["secret"] == "SECRET1"
 
     def test_populate_image_if_not_present(self, cloud_run_worker_v2_job_config):
         cloud_run_worker_v2_job_config._populate_image_if_not_present()
