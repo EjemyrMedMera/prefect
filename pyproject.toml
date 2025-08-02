@@ -122,6 +122,11 @@ redis = ["prefect-redis>=0.2.0"]
 # Monitoring extras
 email = ["prefect-email>=0.4.0"]
 slack = ["prefect-slack>=0.3.0"]
+# Auth extras
+iap-auth = [
+    "google-cloud-secret-manager>=2.24.0",
+    "google-auth>=2.40.3",
+]
 
 [project.scripts]
 prefect = "prefect.cli:app"
