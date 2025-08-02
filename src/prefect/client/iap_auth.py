@@ -2,7 +2,7 @@ import asyncio
 import json
 import threading
 import time
-from typing import Generator, Optional
+from typing import AsyncGenerator, Generator, Optional
 
 import google.auth
 import google.auth.transport.requests
@@ -250,7 +250,7 @@ class IAPAuth(httpx.Auth):
 
     async def async_auth_flow(
         self, request: httpx.Request
-    ) -> Generator[httpx.Request, httpx.Response, None]:
+    ) -> AsyncGenerator[httpx.Request, httpx.Response, None]:
         """
         Asynchronous authentication flow for httpx.AsyncClient.
 
