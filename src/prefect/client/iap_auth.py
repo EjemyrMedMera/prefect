@@ -250,7 +250,7 @@ class IAPAuth(httpx.Auth):
 
     async def async_auth_flow(
         self, request: httpx.Request
-    ) -> AsyncGenerator[httpx.Request, httpx.Response, None]:
+    ) -> AsyncGenerator[httpx.Request, httpx.Response]:
         """
         Asynchronous authentication flow for httpx.AsyncClient.
 
