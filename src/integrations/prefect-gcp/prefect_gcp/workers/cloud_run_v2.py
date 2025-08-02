@@ -16,7 +16,7 @@ from googleapiclient.errors import HttpError
 from jsonpatch import JsonPatch
 from pydantic import Field, PrivateAttr, field_validator
 
-from prefect.logging.loggers import PrefectLogAdapter
+from prefect.logging.loggers import PrefectLogAdapter, flow_run_logger
 from prefect.utilities.asyncutils import run_sync_in_worker_thread
 from prefect.utilities.dockerutils import get_prefect_image_name
 from prefect.workers.base import (
@@ -304,7 +304,7 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
         ]
         envs.extend(envs_from_secrets)
 
-        # Add Prefect API key from secret if configured
+        # Add the Prefect API key and auth string to the environment variables
         if self.prefect_api_key_secret:
             envs.append(
                 {
@@ -314,8 +314,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
                     },
                 }
             )
-
-        # Add Prefect API auth string from secret if configured
         if self.prefect_api_auth_string_secret:
             envs.append(
                 {
@@ -327,35 +325,6 @@ class CloudRunWorkerJobV2Configuration(BaseJobConfiguration):
             )
 
         self.job_body["template"]["template"]["containers"][0]["env"].extend(envs)
-
-        self._deduplicate_env()
-
-    def _deduplicate_env(self):
-        """
-        Deduplicates the environment variables giving preference to the latest configured values.
-        In this worker that is in order of decreasing precedence:
-        1. Environment variables set using references to secrets in flow run
-            configuration  configuration (possibly originating from work pool
-            config or deployment specific config).
-        2. Environment variables set using plain text in the flow run
-            configuration (possibly originating from work pool config or
-            deployment specific config).
-        3. Environment variables inherited and/or created by the worker
-            context. (e.g. PREFECT_DEBUG_MODE, PREFECT__FLOW_RUN_ID, etc.)
-        """
-        # Itterate from back to keep the latest appended values for each env name
-        envs_to_keep = {}
-        for env in reversed(
-            self.job_body["template"]["template"]["containers"][0]["env"]
-        ):
-            if env["name"] in envs_to_keep:
-                continue
-
-            envs_to_keep[env["name"]] = env
-
-        self.job_body["template"]["template"]["containers"][0]["env"] = list(
-            envs_to_keep.values()
-        )
 
     def _configure_cloudsql_volumes(self):
         """
